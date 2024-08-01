@@ -12,27 +12,37 @@ import Network.HTTP.Req
 import System.Exit (die)
 import System.Posix.ByteString
   ( fileExist
-  , getUserEntryForName
-  , homeDirectory
   , rename
+  )
+import System.Posix.Env.ByteString (getArgs)
+import System.Posix.User.ByteString
+  ( UserEntry (homeDirectory)
+  , getUserEntryForName
   )
 import Prelude
 
 type Year = T.Text
 type Month = T.Text
+type HomeDir = ByteString
 
 main :: IO ()
 main = do
+  (homeDirectory -> homeDir) <- getArgs >>= firstArg >>= getUserEntryForName
   tz <- getCurrentTimeZone
   (year, month) <- mkYearMonth . utcToLocalTime tz <$> getCurrentTime
-  newImgExists <- alreadyExists year month
+  newImgExists <- alreadyExists year month homeDir
   if newImgExists
     then
       die
         [i|Error: kriegs_#{year}_#{month}_4K_3840x2160_calendar.jpg already exists, skipping...|]
     else do
       imageData <- runReq defaultHttpConfig $ requestImage year month
-      swapCurrentWp year month imageData
+      swapCurrentWp year month homeDir imageData
+
+firstArg :: [a] -> IO a
+firstArg [] =
+  die "Missing argument: expected username in first argument, but received none"
+firstArg (user : _) = pure user
 
 mkYearMonth :: LocalTime -> (Year, Month)
 mkYearMonth lt = do
@@ -40,9 +50,6 @@ mkYearMonth lt = do
       yearStr = fmtDate "%Y"
       monthStr = fmtDate "%B"
   (yearStr, monthStr)
-
-getHomeDir :: (MonadIO m) => m String
-getHomeDir = liftIO (homeDirectory <$> getUserEntryForName "cajun")
 
 requestImage :: (MonadHttp m, MonadIO m) => Year -> Month -> m ByteString
 requestImage year month = do
@@ -61,10 +68,9 @@ requestImage year month = do
       mempty -- query params, headers, etc
   pure $ responseBody r
 
-swapCurrentWp :: (MonadIO m) => Year -> Month -> ByteString -> m ()
-swapCurrentWp year month imgData = do
+swapCurrentWp :: (MonadIO m) => Year -> Month -> HomeDir -> ByteString -> m ()
+swapCurrentWp year month homeDir imgData = do
   let fileName = [i|wallpaper-#{month}-#{year}.jpg|] :: ByteString
-  homeDir <- getHomeDir
   let
     newFP = [i|#{homeDir}/Pictures/#{fileName}|] :: ByteString
     oldFP = [i|#{homeDir}/Pictures/wallpaper.jpg|] :: FilePath
@@ -75,9 +81,8 @@ swapCurrentWp year month imgData = do
     liftIO $ print ([i|write #{BS.length imgData} bytes to #{oldFP}|] :: String)
     liftIO $ BS.writeFile oldFP imgData -- new image -> wallpaper.jpg
 
-alreadyExists :: (MonadIO m) => Year -> Month -> m Bool
-alreadyExists year month = do
+alreadyExists :: (MonadIO m) => Year -> Month -> HomeDir -> m Bool
+alreadyExists year month homeDir = do
   let relFileName = [i|wallpaper-#{month}-#{year}.jpg|] :: ByteString
-  homeDir <- getHomeDir
   let newFP = [i|#{homeDir}/Pictures/#{relFileName}|] :: ByteString
   liftIO $ fileExist newFP
