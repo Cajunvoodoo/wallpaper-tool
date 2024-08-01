@@ -1,21 +1,5 @@
 {
   "nodes": {
-    "cabal-gild": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1719844184,
-        "narHash": "sha256-aF9yIrCiKboEM7dT0QrefIZ36L3eeN8CvQ7BVkI15Yo=",
-        "owner": "tfausak",
-        "repo": "cabal-gild",
-        "rev": "f30f35eadd68366b6e3087c060df83eef09be4b2",
-        "type": "github"
-      },
-      "original": {
-        "owner": "tfausak",
-        "repo": "cabal-gild",
-        "type": "github"
-      }
-    },
     "flake-utils": {
       "locked": {
         "lastModified": 1652776076,
@@ -98,7 +82,6 @@
     },
     "root": {
       "inputs": {
-        "cabal-gild": "cabal-gild",
         "nix-filter": "nix-filter",
         "nix-pre-commit": "nix-pre-commit",
         "nixpkgs": "nixpkgs_2"
