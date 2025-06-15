@@ -86,32 +86,33 @@
                   #with pkgs.haskell.lib.compose;
                   {
                     # cabal-gild = super.haskell.lib.doJailbreak (self.callCabal2nix "cabal-gild" "${inputs.cabal-gild}" { });
-                    ${pname} =
-                      pkgs.haskell.lib.overrideCabal
-                        (self.callCabal2nix pname hsSrc { })
-                        (_drv: {
-                          isLibrary = false;
-                          isExecutable = true;
-                          enableSharedExecutables = false;
-                          enableSharedLibraries = false;
-                          configureFlags = [
-                            "--ghc-option=-split-sections"
-                            "--ghc-option=-optl=-static"
-                            "--ghc-option=-optl=-lbz2"
-                            "--ghc-option=-optl=-lz"
-                            "--ghc-option=-optl=-lelf"
-                            "--ghc-option=-optl=-llzma"
-                            "--ghc-option=-optl=-lzstd"
-                            "--extra-lib-dirs=${pkgs.glibc.static}/lib"
-                            "--extra-lib-dirs=${pkgs.gmp6.override { withStatic = true; }}/lib"
-                            "--extra-lib-dirs=${pkgs.zlib.static}/lib"
-                            "--extra-lib-dirs=${(pkgs.xz.override { enableStatic = true; }).out}/lib"
-                            "--extra-lib-dirs=${(pkgs.zstd.override { enableStatic = true; }).out}/lib"
-                            "--extra-lib-dirs=${(pkgs.bzip2.override { enableStatic = true; }).out}/lib"
-                            "--extra-lib-dirs=${(pkgs.elfutils.overrideAttrs (old: { dontDisableStatic = true; })).out}/lib"
-                            "--extra-lib-dirs=${pkgs.libffi.overrideAttrs (old: { dontDisableStatic = true; })}/lib"
-                          ];
-                        });
+                    ${pname} = self.callCabal2nix pname hsSrc { };
+                    # ${pname} =
+                    #   pkgs.haskell.lib.overrideCabal
+                    #     (self.callCabal2nix pname hsSrc { })
+                    #     (_drv: {
+                    #       isLibrary = false;
+                    #       isExecutable = true;
+                    #       enableSharedExecutables = false;
+                    #       enableSharedLibraries = false;
+                    #       configureFlags = [
+                    #         "--ghc-option=-split-sections"
+                    #         "--ghc-option=-optl=-static"
+                    #         "--ghc-option=-optl=-lbz2"
+                    #         "--ghc-option=-optl=-lz"
+                    #         "--ghc-option=-optl=-lelf"
+                    #         "--ghc-option=-optl=-llzma"
+                    #         "--ghc-option=-optl=-lzstd"
+                    #         "--extra-lib-dirs=${pkgs.glibc.static}/lib"
+                    #         "--extra-lib-dirs=${pkgs.gmp6.override { withStatic = true; }}/lib"
+                    #         "--extra-lib-dirs=${pkgs.zlib.static}/lib"
+                    #         "--extra-lib-dirs=${(pkgs.xz.override { enableStatic = true; }).out}/lib"
+                    #         "--extra-lib-dirs=${(pkgs.zstd.override { enableStatic = true; }).out}/lib"
+                    #         "--extra-lib-dirs=${(pkgs.bzip2.override { enableStatic = true; }).out}/lib"
+                    #         "--extra-lib-dirs=${(pkgs.elfutils.overrideAttrs (old: { dontDisableStatic = true; })).out}/lib"
+                    #         "--extra-lib-dirs=${pkgs.libffi.overrideAttrs (old: { dontDisableStatic = true; })}/lib"
+                    #       ];
+                    #     });
                   };
               };
             in

@@ -23,7 +23,7 @@ executable cajun-kriegs-wallpaper
   -- other-extensions:
   build-depends:
     aeson,
-    base ^>=4.18.2.1,
+    base,
     bytestring,
     data-default,
     req,

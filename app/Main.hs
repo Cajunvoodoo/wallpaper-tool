@@ -33,8 +33,10 @@ main = do
   newImgExists <- alreadyExists year month homeDir
   if newImgExists
     then
-      die
-        [i|Error: kriegs_#{year}_#{month}_4K_3840x2160_calendar.jpg already exists, skipping...|]
+      print
+        ( [i|Warning: kriegs_#{year}_#{month}_4K_3840x2160_calendar.jpg already exists, skipping...|]
+            :: T.Text
+        )
     else do
       imageData <- runReq defaultHttpConfig $ requestImage year month
       swapCurrentWp year month homeDir imageData
@@ -76,9 +78,9 @@ swapCurrentWp year month homeDir imgData = do
     oldFP = [i|#{homeDir}/Pictures/wallpaper.jpg|] :: FilePath
   destExists <- liftIO $ fileExist newFP
   unless destExists do
-    liftIO $ print ([i|rename #{oldFP} to #{newFP}|] :: String)
+    liftIO $ print ([i|rename #{oldFP} to #{newFP}|] :: T.Text)
     liftIO $ rename (BS.pack oldFP) newFP -- wallpaper.jpg -> wallpaper-MONTH-YEAR.jpg
-    liftIO $ print ([i|write #{BS.length imgData} bytes to #{oldFP}|] :: String)
+    liftIO $ print ([i|write #{BS.length imgData} bytes to #{oldFP}|] :: T.Text)
     liftIO $ BS.writeFile oldFP imgData -- new image -> wallpaper.jpg
 
 alreadyExists :: (MonadIO m) => Year -> Month -> HomeDir -> m Bool
