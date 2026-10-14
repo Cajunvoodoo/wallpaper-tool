@@ -32,7 +32,7 @@ import Servant.Client
 import Servant.Client.Internal.HttpClient (runClientM)
 import System.Exit (die)
 import System.Posix.ByteString
-  ( createSymbolicLink
+  ( createLink
   , fileExist
   , removeLink
   )
@@ -71,7 +71,7 @@ main' homeDir year month = do
   newImgExists <- fileExist fileDest
   if newImgExists
     then do
-      putStrLn [i|Warning: #{fileDest} already exists not downloading...|]
+      putStrLn [i|Warning: #{fileDest} already exists, not downloading...|]
     else do
       reqResult <- downloadImage year month
       case reqResult of
@@ -147,13 +147,15 @@ api = Proxy
 requestImage' :: Year -> T.Text -> ClientM ByteString
 requestImage' = client api
 
-swapCurrentWp :: (MonadIO m) => FileDest -> FileDest -> m ()
+swapCurrentWp :: FileDest -> FileDest -> IO ()
 swapCurrentWp wallpaperDest symDest = do
-  liftIO $ putStrLn [i|symlink #{symDest} -> #{wallpaperDest}|]
-  symExists <- liftIO $ fileExist symDest
+  symExists <- fileExist symDest
   when symExists do
-    liftIO $ removeLink symDest
-  liftIO $ createSymbolicLink wallpaperDest symDest
+    putStrLn [i|rm #{symDest}|]
+    removeLink symDest
+
+  putStrLn [i|hardlink #{symDest} -> #{wallpaperDest}|]
+  createLink wallpaperDest symDest
 
 saveImage :: (MonadIO m) => FileDest -> ByteString -> m ()
 saveImage fileDest imgData = do
