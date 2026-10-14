@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Control.Monad (unless)
+import Control.Monad (when)
 import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as BS
@@ -23,7 +23,8 @@ import Servant.API
   , (:>)
   )
 import Servant.Client
-  ( ClientM
+  ( ClientError
+  , ClientM
   , client
   , mkClientEnv
   , parseBaseUrl
@@ -31,8 +32,9 @@ import Servant.Client
 import Servant.Client.Internal.HttpClient (runClientM)
 import System.Exit (die)
 import System.Posix.ByteString
-  ( fileExist
-  , rename
+  ( createSymbolicLink
+  , fileExist
+  , removeLink
   )
 import System.Posix.Env.ByteString (getArgs)
 import System.Posix.User.ByteString
@@ -42,29 +44,58 @@ import System.Posix.User.ByteString
 import Prelude
 
 type Year = T.Text
+
 type Month = T.Text
+
 type HomeDir = ByteString
+
+type FileDest = ByteString
 
 main :: IO ()
 main = do
   (homeDirectory -> homeDir) <- getArgs >>= firstArg >>= getUserEntryForName
   tz <- getCurrentTimeZone
   (year, month) <- mkYearMonth . utcToLocalTime tz <$> getCurrentTime
-  newImgExists <- alreadyExists year month homeDir
+  main' homeDir year month
+
+-- mapM_ (uncurry (main' homeDir))
+--      [(year, month) | year <- ["2024", "2025", "2026"]
+--                     , month <- ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]]
+
+main' :: HomeDir -> Year -> Month -> IO ()
+main' homeDir year month = do
+  let fileDest = mkFileDest year month homeDir
+      symDest = mkSymDest homeDir
+  putStrLn [i|Downloading wallpaper for #{month} #{year}|]
+
+  newImgExists <- fileExist fileDest
   if newImgExists
-    then
-      print
-        ( [i|Warning: kriegs_#{year}_#{month}_4K_3840x2160_calendar.jpg already exists, skipping...|]
-            :: T.Text
-        )
+    then do
+      putStrLn [i|Warning: #{fileDest} already exists not downloading...|]
     else do
-      manager <- newManager tlsManagerSettings
-      baseUrl <- parseBaseUrl "kriegs.net"
-      reqResult <-
-        flip runClientM (mkClientEnv manager baseUrl) $ requestImage year month
+      reqResult <- downloadImage year month
       case reqResult of
-        Left err -> print ([i|Error: #{err}|] :: T.Text)
-        Right imageData -> swapCurrentWp year month homeDir imageData
+        Left err -> putStrLn [i|Error: #{err}|]
+        Right imageData -> saveImage fileDest imageData
+
+  swapCurrentWp fileDest symDest
+
+mkRelFileName :: Year -> Month -> ByteString
+mkRelFileName year month = [i|wallpaper-#{month}-#{year}.jpg|]
+
+mkFileDest :: Year -> Month -> HomeDir -> FileDest
+mkFileDest year month homeDir = [i|#{homeDir}/Pictures/#{relFileName}|]
+ where
+  relFileName = mkRelFileName year month
+
+mkSymDest :: HomeDir -> FileDest
+mkSymDest homeDir = [i|#{homeDir}/Pictures/wallpaper.jpg|]
+
+downloadImage :: Year -> Month -> IO (Either ClientError ByteString)
+downloadImage year month = do
+  manager <- newManager tlsManagerSettings
+  baseUrl <- parseBaseUrl "kriegs.net"
+  flip runClientM (mkClientEnv manager baseUrl) $ requestImage year month
 
 firstArg :: [a] -> IO a
 firstArg [] =
@@ -90,17 +121,7 @@ requestImage year month = do
   let imageUrls =
         fmap (\sep -> [i|kriegs_#{year}_#{month}_4K_3840x2160#{sep}calendar.jpg|]) seps
   let reqs = fmap (requestImage' year) imageUrls
-  r <- foldr1 (<!>) reqs
-  -- r <-
-  --   req
-  --     GET -- method
-  --     imageUrl -- url
-  --     NoReqBody -- no req body
-  --     bsResponse -- bytestring
-  --     mempty -- query params, headers, etc
-  pure r
-
--- pure $ responseBody r
+  foldr1 (<!>) reqs
 
 data JPEG
 
@@ -126,21 +147,15 @@ api = Proxy
 requestImage' :: Year -> T.Text -> ClientM ByteString
 requestImage' = client api
 
-swapCurrentWp :: (MonadIO m) => Year -> Month -> HomeDir -> ByteString -> m ()
-swapCurrentWp year month homeDir imgData = do
-  let fileName = [i|wallpaper-#{month}-#{year}.jpg|] :: ByteString
-  let
-    newFP = [i|#{homeDir}/Pictures/#{fileName}|] :: ByteString
-    oldFP = [i|#{homeDir}/Pictures/wallpaper.jpg|] :: FilePath
-  destExists <- liftIO $ fileExist newFP
-  unless destExists do
-    liftIO $ print ([i|rename #{oldFP} to #{newFP}|] :: T.Text)
-    liftIO $ rename (BS.pack oldFP) newFP -- wallpaper.jpg -> wallpaper-MONTH-YEAR.jpg
-    liftIO $ print ([i|write #{BS.length imgData} bytes to #{oldFP}|] :: T.Text)
-    liftIO $ BS.writeFile oldFP imgData -- new image -> wallpaper.jpg
+swapCurrentWp :: (MonadIO m) => FileDest -> FileDest -> m ()
+swapCurrentWp wallpaperDest symDest = do
+  liftIO $ putStrLn [i|symlink #{symDest} -> #{wallpaperDest}|]
+  symExists <- liftIO $ fileExist symDest
+  when symExists do
+    liftIO $ removeLink symDest
+  liftIO $ createSymbolicLink wallpaperDest symDest
 
-alreadyExists :: (MonadIO m) => Year -> Month -> HomeDir -> m Bool
-alreadyExists year month homeDir = do
-  let relFileName = [i|wallpaper-#{month}-#{year}.jpg|] :: ByteString
-  let newFP = [i|#{homeDir}/Pictures/#{relFileName}|] :: ByteString
-  liftIO $ fileExist newFP
+saveImage :: (MonadIO m) => FileDest -> ByteString -> m ()
+saveImage fileDest imgData = do
+  liftIO $ putStrLn [i|write #{BS.length imgData} bytes to #{fileDest}|]
+  liftIO $ BS.writeFile (BS.unpack fileDest) imgData
